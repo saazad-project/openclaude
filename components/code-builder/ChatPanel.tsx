@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useChat } from '@ai-sdk/react'
+import { DefaultChatTransport } from 'ai'
 import { Send, Bot, User, Loader2, Wrench, CheckCircle, XCircle, Sparkles } from 'lucide-react'
 import { useFileStore } from '../../lib/store/files'
 import { cn } from '../../lib/utils'
@@ -9,13 +10,18 @@ import { cn } from '../../lib/utils'
 export function ChatPanel() {
   const { files, createFile, updateFile, readFile, addTerminalOutput } = useFileStore()
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [inputValue, setInputValue] = useState('')
+  const [input, setInput] = useState('')
   
-  const { messages, isLoading, append } = useChat({
-    api: '/api/code',
-    body: { files },
+  const { messages, sendMessage, status, addToolOutput } = useChat({
+    transport: new DefaultChatTransport({ 
+      api: '/api/code',
+      body: { files },
+    }),
     onToolCall: async ({ toolCall }) => {
-      const { toolName, args } = toolCall
+      if (toolCall.dynamic) return
+      
+      const toolName = toolCall.toolName
+      const args = toolCall.args as Record<string, unknown>
       
       addTerminalOutput(`> Tool: ${toolName}`)
       
@@ -28,6 +34,11 @@ export function ChatPanel() {
           createFile(path, content)
         }
         addTerminalOutput(`  Created/Updated: ${path}`)
+        addToolOutput({
+          tool: 'file_write',
+          toolCallId: toolCall.toolCallId,
+          output: `File ${path} written successfully`,
+        })
       } else if (toolName === 'file_edit') {
         const { path, old_string, new_string } = args as { 
           path: string; old_string: string; new_string: string 
@@ -37,6 +48,17 @@ export function ChatPanel() {
           const newContent = currentContent.replace(old_string, new_string)
           updateFile(path, newContent)
           addTerminalOutput(`  Edited: ${path}`)
+          addToolOutput({
+            tool: 'file_edit',
+            toolCallId: toolCall.toolCallId,
+            output: `File ${path} edited successfully`,
+          })
+        } else {
+          addToolOutput({
+            tool: 'file_edit',
+            toolCallId: toolCall.toolCallId,
+            output: `Error: File ${path} not found`,
+          })
         }
       }
     },
@@ -48,16 +70,27 @@ export function ChatPanel() {
     },
   })
   
+  const isLoading = status === 'streaming' || status === 'submitted'
+  
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!inputValue.trim() || isLoading) return
+    if (!input.trim() || isLoading) return
     
-    append({ role: 'user', content: inputValue })
-    setInputValue('')
+    sendMessage({ text: input })
+    setInput('')
+  }
+  
+  // Helper to extract text from message parts (AI SDK 6)
+  const getMessageText = (message: typeof messages[0]) => {
+    if (!message.parts || !Array.isArray(message.parts)) return ''
+    return message.parts
+      .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+      .map((p) => p.text)
+      .join('')
   }
   
   return (
@@ -80,19 +113,19 @@ export function ChatPanel() {
               <p className="text-center opacity-70">Try asking:</p>
               <div className="space-y-1">
                 <button 
-                  onClick={() => setInputValue('Create a React counter component')}
+                  onClick={() => setInput('Create a React counter component')}
                   className="block w-full text-left px-3 py-1.5 rounded bg-secondary/50 hover:bg-secondary transition-colors"
                 >
                   &quot;Create a React counter component&quot;
                 </button>
                 <button 
-                  onClick={() => setInputValue('Build a Next.js API route for user auth')}
+                  onClick={() => setInput('Build a Next.js API route for user auth')}
                   className="block w-full text-left px-3 py-1.5 rounded bg-secondary/50 hover:bg-secondary transition-colors"
                 >
                   &quot;Build a Next.js API route for user auth&quot;
                 </button>
                 <button 
-                  onClick={() => setInputValue('Create a todo app with TypeScript')}
+                  onClick={() => setInput('Create a todo app with TypeScript')}
                   className="block w-full text-left px-3 py-1.5 rounded bg-secondary/50 hover:bg-secondary transition-colors"
                 >
                   &quot;Create a todo app with TypeScript&quot;
@@ -125,33 +158,37 @@ export function ChatPanel() {
                     ? 'bg-primary text-primary-foreground ml-12'
                     : 'bg-secondary/50 mr-12'
                 )}>
-                  <div className="prose prose-sm prose-invert max-w-none">
-                    {message.content}
+                  <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap">
+                    {getMessageText(message)}
                   </div>
                 </div>
               </div>
               
               {/* Tool calls visualization */}
-              {message.toolInvocations && message.toolInvocations.length > 0 && (
+              {message.parts && message.parts.some(p => p.type === 'tool-invocation') && (
                 <div className="ml-11 space-y-1">
-                  {message.toolInvocations.map((tool, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded bg-muted/50 text-xs"
-                    >
-                      <Wrench className="w-3 h-3 text-muted-foreground" />
-                      <span className="font-mono text-muted-foreground">
-                        {tool.toolName}
-                      </span>
-                      {tool.state === 'result' ? (
-                        <CheckCircle className="w-3 h-3 text-accent ml-auto" />
-                      ) : tool.state === 'call' ? (
-                        <Loader2 className="w-3 h-3 animate-spin ml-auto" />
-                      ) : (
-                        <XCircle className="w-3 h-3 text-destructive ml-auto" />
-                      )}
-                    </div>
-                  ))}
+                  {message.parts
+                    .filter((p): p is { type: 'tool-invocation'; toolInvocation: { toolName: string; state: string } } => 
+                      p.type === 'tool-invocation'
+                    )
+                    .map((part, index) => (
+                      <div 
+                        key={index}
+                        className="flex items-center gap-2 px-3 py-1.5 rounded bg-muted/50 text-xs"
+                      >
+                        <Wrench className="w-3 h-3 text-muted-foreground" />
+                        <span className="font-mono text-muted-foreground">
+                          {part.toolInvocation.toolName}
+                        </span>
+                        {part.toolInvocation.state === 'output-available' ? (
+                          <CheckCircle className="w-3 h-3 text-accent ml-auto" />
+                        ) : part.toolInvocation.state === 'input-available' || part.toolInvocation.state === 'input-streaming' ? (
+                          <Loader2 className="w-3 h-3 animate-spin ml-auto" />
+                        ) : part.toolInvocation.state === 'output-error' ? (
+                          <XCircle className="w-3 h-3 text-destructive ml-auto" />
+                        ) : null}
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -180,15 +217,15 @@ export function ChatPanel() {
         <div className="flex gap-2">
           <input
             type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             placeholder="Ask me to build something..."
             disabled={isLoading}
             className="flex-1 px-4 py-2 bg-input border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={isLoading || !inputValue.trim()}
+            disabled={isLoading || !input.trim()}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isLoading ? (
