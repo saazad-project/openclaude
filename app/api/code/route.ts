@@ -29,7 +29,7 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gemini-2.0-flash',
+        model: 'LongCat-Flash-Thinking-2601',
         messages: formattedMessages,
         stream: true,
         temperature: 0.7,
