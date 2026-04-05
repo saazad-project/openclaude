@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     }))
 
     // Call LongCat Chat API
-    const response = await fetch(`${LONGCAT_API_URL}/v1/chat/completions`, {
+    const response = await fetch(`${LONGCAT_API_URL}/openai/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LONGCAT_API_KEY}`,
