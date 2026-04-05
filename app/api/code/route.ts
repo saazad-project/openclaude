@@ -1,111 +1,175 @@
-import { streamText, tool } from 'ai'
 import { z } from 'zod'
 
 export const maxDuration = 60
 
-// System prompt for the AI Software Engineer
-const SYSTEM_PROMPT = `You are an expert AI Software Engineer, similar to Cursor, Bolt, and Devin combined.
+// Demo mode - simulates AI responses without requiring external API
+// Replace with real API integration when you have the correct endpoint
 
-## Core Capabilities
-- Full-stack development (React, Next.js, Node.js, Python, etc.)
-- Code generation, refactoring, and debugging
-- File system operations (read, write, edit files)
-- Project scaffolding and architecture design
+const DEMO_RESPONSES: Record<string, string> = {
+  default: `I'm your AI Software Engineer assistant! I can help you with:
 
-## Tools Available
-- file_read: Read file contents
-- file_write: Create or overwrite files
-- file_edit: Make targeted edits to existing files
-- glob: Find files matching patterns
-- grep: Search for text in files
+- **Code Generation**: Create new files, components, and features
+- **Code Editing**: Modify existing code with precision
+- **Debugging**: Find and fix issues in your code
+- **Architecture**: Design and scaffold projects
 
-## Guidelines
-1. Always read files before editing to understand current state
-2. Make minimal, focused changes
-3. Follow existing code patterns and conventions
-4. Write clean, well-documented code
-5. Handle errors gracefully
+Try asking me to:
+- "Create a React component for a login form"
+- "Add a new API endpoint for user authentication"
+- "Refactor this code to use TypeScript"
 
-You are helpful, precise, and efficient. Always explain what you're doing.`
+Note: This is demo mode. To enable full AI capabilities, configure your API endpoint.`,
+  
+  hello: `Hello! I'm ready to help you build amazing software. What would you like to create today?`,
+  
+  react: `Here's a React component example:
+
+\`\`\`tsx
+import { useState } from 'react'
+
+export function Counter() {
+  const [count, setCount] = useState(0)
+  
+  return (
+    <div className="flex flex-col items-center gap-4 p-6">
+      <h2 className="text-2xl font-bold">Count: {count}</h2>
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setCount(c => c - 1)}
+          className="px-4 py-2 bg-red-500 text-white rounded"
+        >
+          -
+        </button>
+        <button 
+          onClick={() => setCount(c => c + 1)}
+          className="px-4 py-2 bg-green-500 text-white rounded"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+\`\`\`
+
+Would you like me to save this to a file?`,
+
+  login: `Here's a login form component:
+
+\`\`\`tsx
+'use client'
+import { useState } from 'react'
+
+export function LoginForm() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    // Add your authentication logic here
+    console.log('Login:', { email, password })
+    setLoading(false)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-md">
+      <div>
+        <label className="block text-sm font-medium mb-1">Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full px-3 py-2 border rounded-lg"
+          required
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-3 py-2 border rounded-lg"
+          required
+        />
+      </div>
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+      >
+        {loading ? 'Signing in...' : 'Sign In'}
+      </button>
+    </form>
+  )
+}
+\`\`\`
+
+I can save this to \`components/LoginForm.tsx\` if you'd like!`,
+}
+
+function getResponse(message: string): string {
+  const lower = message.toLowerCase()
+  
+  if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
+    return DEMO_RESPONSES.hello
+  }
+  if (lower.includes('react') || lower.includes('component') || lower.includes('counter')) {
+    return DEMO_RESPONSES.react
+  }
+  if (lower.includes('login') || lower.includes('auth') || lower.includes('form')) {
+    return DEMO_RESPONSES.login
+  }
+  
+  return DEMO_RESPONSES.default
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     const messages = body.messages || []
     
-    // Ensure messages have the correct format
-    const formattedMessages = messages.map((m: { role: string; content: string }) => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content,
-    }))
+    // Get the last user message
+    const lastMessage = messages[messages.length - 1]
+    const userMessage = lastMessage?.content || ''
     
-    // Define tools for file operations
-    const tools = {
-      file_read: tool({
-        description: 'Read the contents of a file',
-        parameters: z.object({
-          path: z.string().describe('The file path to read'),
-        }),
-        execute: async ({ path }) => {
-          return { success: true, path, content: `[File content of ${path} would be here]` }
-        },
-      }),
-      
-      file_write: tool({
-        description: 'Write content to a file (creates or overwrites)',
-        parameters: z.object({
-          path: z.string().describe('The file path to write'),
-          content: z.string().describe('The content to write'),
-        }),
-        execute: async ({ path, content }) => {
-          return { success: true, path, message: `File written: ${path}` }
-        },
-      }),
-      
-      file_edit: tool({
-        description: 'Edit a file by replacing old content with new content',
-        parameters: z.object({
-          path: z.string().describe('The file path to edit'),
-          old_string: z.string().describe('The exact string to find and replace'),
-          new_string: z.string().describe('The replacement string'),
-        }),
-        execute: async ({ path, old_string, new_string }) => {
-          return { success: true, path, message: `File edited: ${path}` }
-        },
-      }),
-      
-      glob: tool({
-        description: 'Find files matching a glob pattern',
-        parameters: z.object({
-          pattern: z.string().describe('The glob pattern (e.g., "**/*.ts")'),
-        }),
-        execute: async ({ pattern }) => {
-          return { success: true, pattern, files: [] }
-        },
-      }),
-      
-      grep: tool({
-        description: 'Search for text patterns in files',
-        parameters: z.object({
-          pattern: z.string().describe('The search pattern (regex supported)'),
-          path: z.string().optional().describe('Directory to search in'),
-        }),
-        execute: async ({ pattern, path }) => {
-          return { success: true, pattern, matches: [] }
-        },
-      }),
-    }
+    // Get demo response
+    const response = getResponse(userMessage)
     
-    // Use Vercel AI Gateway - provides free access to Gemini/OpenAI
-    const result = streamText({
-      model: 'google/gemini-2.0-flash',
-      system: SYSTEM_PROMPT,
-      messages: formattedMessages,
-      tools,
-      maxSteps: 10,
+    // Simulate streaming by returning chunks
+    const encoder = new TextEncoder()
+    const stream = new ReadableStream({
+      async start(controller) {
+        // Send the response in chunks to simulate streaming
+        const words = response.split(' ')
+        
+        for (let i = 0; i < words.length; i++) {
+          const chunk = (i === 0 ? '' : ' ') + words[i]
+          const data = JSON.stringify({
+            type: 'text-delta',
+            delta: chunk,
+          })
+          controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          
+          // Small delay to simulate streaming
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        
+        // Send done signal
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      },
     })
     
-    return result.toUIMessageStreamResponse()
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    })
   } catch (error) {
     console.error('[v0] API Error:', error)
     return new Response(
