@@ -1,5 +1,4 @@
 import { streamText, tool } from 'ai'
-import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { z } from 'zod'
 
 export const maxDuration = 60
@@ -29,28 +28,6 @@ const SYSTEM_PROMPT = `You are an expert AI Software Engineer, similar to Cursor
 
 You are helpful, precise, and efficient. Always explain what you're doing.`
 
-// Create Google AI provider with LongCat or Gemini key
-function createProvider() {
-  const longcatKey = process.env.LONGCAT_KEY_1
-  const geminiKey = process.env.GEMINI_KEY_1 || process.env.GOOGLE_GENERATIVE_AI_API_KEY
-  
-  const apiKey = longcatKey || geminiKey
-  
-  if (!apiKey) {
-    throw new Error('No API key found. Set LONGCAT_KEY_1 or GEMINI_KEY_1')
-  }
-  
-  // LongCat uses a different base URL
-  const baseURL = longcatKey 
-    ? 'https://api.longcat.ai/v1'
-    : undefined
-  
-  return createGoogleGenerativeAI({
-    apiKey,
-    baseURL,
-  })
-}
-
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -61,8 +38,6 @@ export async function POST(req: Request) {
       role: m.role as 'user' | 'assistant',
       content: m.content,
     }))
-    
-    const provider = createProvider()
     
     // Define tools for file operations
     const tools = {
@@ -121,8 +96,9 @@ export async function POST(req: Request) {
       }),
     }
     
+    // Use Vercel AI Gateway - provides free access to Gemini/OpenAI
     const result = streamText({
-      model: provider('gemini-2.0-flash'),
+      model: 'google/gemini-2.0-flash',
       system: SYSTEM_PROMPT,
       messages: formattedMessages,
       tools,
