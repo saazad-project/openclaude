@@ -1,18 +1,67 @@
 import { streamText, tool } from 'ai'
-import { getAIProvider, getProviderStats } from '../../../lib/ai/provider'
-import { keyManager } from '../../../lib/ai/key-rotation'
-import { SYSTEM_PROMPT, buildContextPrompt } from '../../../lib/ai/prompts'
-import { toolSchemas } from '../../../lib/ai/tools'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { z } from 'zod'
 import { minimatch } from 'minimatch'
 
 export const maxDuration = 60
+
+// System prompt for AI code generation
+const SYSTEM_PROMPT = `You are an expert AI Software Engineer. You help users build applications by:
+1. Understanding their requirements
+2. Creating well-structured, clean code
+3. Explaining your approach clearly
+
+When creating files, use the file_write tool with the full path and content.
+When editing files, use the file_edit tool with the exact old_string to replace and the new_string.
+Always write complete, working code - no placeholders or TODOs.
+
+You have access to these tools:
+- file_read: Read a file's contents
+- file_write: Create or overwrite a file
+- file_edit: Edit part of an existing file
+- glob: Find files matching a pattern
+- grep: Search for text in files
+
+Respond conversationally and explain what you're doing.`
 
 interface RequestBody {
   messages: Array<{ role: 'user' | 'assistant'; content: string }>
   files: Record<string, string>
 }
 
-// Tool execution functions (server-side)
+// Get API provider
+function getProvider() {
+  // Try LongCat keys first
+  for (let i = 1; i <= 50; i++) {
+    const key = process.env[`LONGCAT_KEY_${i}`]
+    if (key) {
+      return {
+        provider: createGoogleGenerativeAI({
+          apiKey: key,
+          baseURL: 'https://api.longcat.dev/v1beta',
+        }),
+        model: 'gemini-2.5-flash-preview-05-20',
+        name: `LongCat-${i}`,
+      }
+    }
+  }
+  
+  // Try Gemini keys
+  for (let i = 1; i <= 10; i++) {
+    const key = process.env[`GEMINI_KEY_${i}`] || (i === 1 ? process.env.GEMINI_API_KEY : undefined)
+    if (key) {
+      return {
+        provider: createGoogleGenerativeAI({ apiKey: key }),
+        model: 'gemini-2.5-flash-preview-05-20',
+        name: `Gemini-${i}`,
+      }
+    }
+  }
+  
+  return null
+}
+
+// Tool execution functions
 function executeFileRead(files: Record<string, string>, path: string) {
   if (path in files) {
     return { success: true, content: files[path] }
@@ -51,101 +100,104 @@ function executeGrep(files: Record<string, string>, pattern: string, path?: stri
 export async function POST(request: Request) {
   try {
     const body: RequestBody = await request.json()
-    const { messages, files } = body
+    const { messages, files = {} } = body
     
-    const providerInfo = getAIProvider()
+    const providerInfo = getProvider()
     
     if (!providerInfo) {
       return Response.json(
-        { error: 'No API keys configured. Please add GEMINI_API_KEY or LONGCAT_KEY_* environment variables.' },
+        { error: 'No API keys configured. Please add LONGCAT_KEY_1 or GEMINI_API_KEY environment variable.' },
         { status: 500 }
       )
     }
     
     const { provider, model, name } = providerInfo
-    const contextPrompt = buildContextPrompt(files)
     
-    console.log(`[API] Using ${name} (${model})`)
-    console.log(`[API] Stats:`, getProviderStats())
+    // Build context from files
+    const fileList = Object.keys(files).length > 0 
+      ? `\n\nCurrent files:\n${Object.keys(files).map(f => `- ${f}`).join('\n')}`
+      : ''
+    
+    console.log(`[v0] Using ${name} (${model})`)
     
     const result = streamText({
       model: provider(model),
-      system: SYSTEM_PROMPT + contextPrompt,
+      system: SYSTEM_PROMPT + fileList,
       messages,
       maxOutputTokens: 8192,
       tools: {
         file_read: tool({
-          description: toolSchemas.file_read.description,
-          parameters: toolSchemas.file_read.parameters,
+          description: 'Read the contents of a file',
+          parameters: z.object({
+            path: z.string().describe('The file path to read'),
+          }),
           execute: async ({ path }) => {
-            console.log(`[Tool] file_read: ${path}`)
+            console.log(`[v0] file_read: ${path}`)
             return executeFileRead(files, path)
           },
         }),
         file_write: tool({
-          description: toolSchemas.file_write.description,
-          parameters: toolSchemas.file_write.parameters,
+          description: 'Create or overwrite a file with new content',
+          parameters: z.object({
+            path: z.string().describe('The file path to write'),
+            content: z.string().describe('The file content'),
+          }),
           execute: async ({ path, content }) => {
-            console.log(`[Tool] file_write: ${path} (${content.length} chars)`)
+            console.log(`[v0] file_write: ${path} (${content.length} chars)`)
             return { 
               success: true, 
               action: 'write',
               path, 
               content,
-              message: `File written: ${path}` 
             }
           },
         }),
         file_edit: tool({
-          description: toolSchemas.file_edit.description,
-          parameters: toolSchemas.file_edit.parameters,
+          description: 'Edit part of an existing file by replacing text',
+          parameters: z.object({
+            path: z.string().describe('The file path to edit'),
+            old_string: z.string().describe('The exact text to replace'),
+            new_string: z.string().describe('The new text'),
+          }),
           execute: async ({ path, old_string, new_string }) => {
-            console.log(`[Tool] file_edit: ${path}`)
+            console.log(`[v0] file_edit: ${path}`)
             return { 
               success: true, 
               action: 'edit',
               path, 
               old_string, 
               new_string,
-              message: `File edited: ${path}` 
             }
           },
         }),
         glob: tool({
-          description: toolSchemas.glob.description,
-          parameters: toolSchemas.glob.parameters,
+          description: 'Find files matching a glob pattern',
+          parameters: z.object({
+            pattern: z.string().describe('The glob pattern'),
+          }),
           execute: async ({ pattern }) => {
-            console.log(`[Tool] glob: ${pattern}`)
+            console.log(`[v0] glob: ${pattern}`)
             return executeGlob(files, pattern)
           },
         }),
         grep: tool({
-          description: toolSchemas.grep.description,
-          parameters: toolSchemas.grep.parameters,
+          description: 'Search for text in files',
+          parameters: z.object({
+            pattern: z.string().describe('The search pattern (regex)'),
+            path: z.string().optional().describe('Optional path prefix to search in'),
+          }),
           execute: async ({ pattern, path }) => {
-            console.log(`[Tool] grep: ${pattern} in ${path || 'all files'}`)
+            console.log(`[v0] grep: ${pattern}`)
             return executeGrep(files, pattern, path)
           },
         }),
-      },
-      onFinish: () => {
-        const keyInfo = keyManager.getNextKey()
-        if (keyInfo) {
-          keyManager.reportSuccess(keyInfo.key)
-        }
       },
     })
     
     return result.toUIMessageStreamResponse()
     
   } catch (error) {
-    console.error('[API] Error:', error)
-    
-    const keyInfo = keyManager.getNextKey()
-    if (keyInfo) {
-      keyManager.reportError(keyInfo.key)
-    }
-    
+    console.error('[v0] API Error:', error)
     return Response.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
@@ -154,8 +206,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
+  const provider = getProvider()
   return Response.json({
     status: 'ok',
-    ...getProviderStats(),
+    provider: provider?.name || 'none',
   })
 }
