@@ -1,8 +1,8 @@
 import { streamText, tool } from 'ai'
-import { getAIProvider, getProviderStats } from '../../lib/ai/provider'
-import { keyManager } from '../../lib/ai/key-rotation'
-import { SYSTEM_PROMPT, buildContextPrompt } from '../../lib/ai/prompts'
-import { toolSchemas } from '../../lib/ai/tools'
+import { getAIProvider, getProviderStats } from '../../../lib/ai/provider'
+import { keyManager } from '../../../lib/ai/key-rotation'
+import { SYSTEM_PROMPT, buildContextPrompt } from '../../../lib/ai/prompts'
+import { toolSchemas } from '../../../lib/ai/tools'
 import { minimatch } from 'minimatch'
 
 export const maxDuration = 60
