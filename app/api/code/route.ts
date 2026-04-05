@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       model: provider(model),
       system: SYSTEM_PROMPT + contextPrompt,
       messages,
-      maxTokens: 8192,
+      maxOutputTokens: 8192,
       tools: {
         file_read: tool({
           description: toolSchemas.file_read.description,
@@ -87,7 +87,6 @@ export async function POST(request: Request) {
           parameters: toolSchemas.file_write.parameters,
           execute: async ({ path, content }) => {
             console.log(`[Tool] file_write: ${path} (${content.length} chars)`)
-            // Return the write instruction - client will apply it
             return { 
               success: true, 
               action: 'write',
@@ -102,7 +101,6 @@ export async function POST(request: Request) {
           parameters: toolSchemas.file_edit.parameters,
           execute: async ({ path, old_string, new_string }) => {
             console.log(`[Tool] file_edit: ${path}`)
-            // Return the edit instruction - client will apply it
             return { 
               success: true, 
               action: 'edit',
@@ -131,7 +129,6 @@ export async function POST(request: Request) {
         }),
       },
       onFinish: () => {
-        // Report success to key manager
         const keyInfo = keyManager.getNextKey()
         if (keyInfo) {
           keyManager.reportSuccess(keyInfo.key)
@@ -144,7 +141,6 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('[API] Error:', error)
     
-    // Report error to key manager for rotation
     const keyInfo = keyManager.getNextKey()
     if (keyInfo) {
       keyManager.reportError(keyInfo.key)
