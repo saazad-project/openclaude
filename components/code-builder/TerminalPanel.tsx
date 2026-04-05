@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from 'react'
 import { Terminal, Trash2 } from 'lucide-react'
-import { useFileStore } from '@/lib/store/files'
+import { useFileStore } from '../../lib/store/files'
 
 export function TerminalPanel() {
   const { terminalOutput, clearTerminal } = useFileStore()

@@ -14,7 +14,7 @@ import { FileExplorer } from './FileExplorer'
 import { CodeEditor } from './CodeEditor'
 import { ChatPanel } from './ChatPanel'
 import { TerminalPanel } from './TerminalPanel'
-import { cn } from '@/lib/utils'
+import { cn } from '../../lib/utils'
 
 export function CodeBuilder() {
   const [showExplorer, setShowExplorer] = useState(true)

@@ -3,8 +3,8 @@
 import { useCallback } from 'react'
 import Editor from '@monaco-editor/react'
 import { X, FileCode } from 'lucide-react'
-import { useFileStore } from '@/lib/store/files'
-import { getLanguageFromPath, cn } from '@/lib/utils'
+import { useFileStore } from '../../lib/store/files'
+import { getLanguageFromPath, cn } from '../../lib/utils'
 
 export function CodeEditor() {
   const { 

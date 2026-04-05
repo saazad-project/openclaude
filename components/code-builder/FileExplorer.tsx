@@ -14,8 +14,8 @@ import {
   FileText,
   Settings,
 } from 'lucide-react'
-import { useFileStore, type FileNode } from '@/lib/store/files'
-import { cn } from '@/lib/utils'
+import { useFileStore, type FileNode } from '../../lib/store/files'
+import { cn } from '../../lib/utils'
 
 const FILE_ICONS: Record<string, React.ReactNode> = {
   tsx: <FileCode className="w-4 h-4 text-blue-400" />,
