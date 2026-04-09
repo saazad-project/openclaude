@@ -1,11 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import {
-  Panel,
-  PanelGroup,
-  PanelResizeHandle,
-} from "react-resizable-panels";
 import { Menu, X, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useChat } from "@/lib/hooks/use-chat";
@@ -102,59 +97,52 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main className="flex-1 overflow-hidden">
-        {/* Desktop Layout */}
-        <div className="hidden h-full lg:block">
-          <PanelGroup direction="horizontal">
-            {/* Chat Panel */}
-            <Panel defaultSize={40} minSize={30} maxSize={60}>
-              <div className="flex h-full flex-col">
-                {/* Desktop Upload Toggle */}
-                <div className="border-b border-border">
-                  <button
-                    onClick={() => setShowUploadPanel(!showUploadPanel)}
-                    className={cn(
-                      "flex w-full items-center gap-2 px-4 py-2 text-xs font-medium transition-colors",
-                      showUploadPanel
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-                    )}
-                  >
-                    <Upload className="h-3.5 w-3.5" />
-                    {uploadedFiles.length > 0
-                      ? `${uploadedFiles.length} file(s) attached`
-                      : "Attach files for context"}
-                  </button>
-                </div>
-
-                {/* Desktop Upload Panel */}
-                {showUploadPanel && (
-                  <div className="border-b border-border p-4">
-                    <FileUpload files={uploadedFiles} onFilesChange={setUploadedFiles} />
-                  </div>
+        {/* Desktop Layout - Grid-based split pane */}
+        <div className="hidden h-full grid-cols-2 gap-0 lg:grid">
+          {/* Chat Panel */}
+          <div className="flex flex-col border-r border-border">
+            {/* Desktop Upload Toggle */}
+            <div className="border-b border-border">
+              <button
+                onClick={() => setShowUploadPanel(!showUploadPanel)}
+                className={cn(
+                  "flex w-full items-center gap-2 px-4 py-2 text-xs font-medium transition-colors",
+                  showUploadPanel
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                 )}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {uploadedFiles.length > 0
+                  ? `${uploadedFiles.length} file(s) attached`
+                  : "Attach files for context"}
+              </button>
+            </div>
 
-                {/* Chat Interface */}
-                <div className="flex-1 overflow-hidden">
-                  <ChatInterface
-                    messages={messages}
-                    streamingContent={streamingContent}
-                    isLoading={isLoading}
-                    onSendMessage={handleSendMessage}
-                    onCancelStream={cancelStream}
-                    onClearMessages={handleClearMessages}
-                  />
-                </div>
+            {/* Desktop Upload Panel */}
+            {showUploadPanel && (
+              <div className="border-b border-border p-4">
+                <FileUpload files={uploadedFiles} onFilesChange={setUploadedFiles} />
               </div>
-            </Panel>
+            )}
 
-            {/* Resize Handle */}
-            <PanelResizeHandle className="resize-handle w-1 bg-border hover:bg-primary/30 transition-colors" />
+            {/* Chat Interface */}
+            <div className="flex-1 overflow-hidden">
+              <ChatInterface
+                messages={messages}
+                streamingContent={streamingContent}
+                isLoading={isLoading}
+                onSendMessage={handleSendMessage}
+                onCancelStream={cancelStream}
+                onClearMessages={handleClearMessages}
+              />
+            </div>
+          </div>
 
-            {/* Preview Panel */}
-            <Panel defaultSize={60} minSize={40}>
-              <PreviewPanel files={generatedFiles} isGenerating={isLoading} />
-            </Panel>
-          </PanelGroup>
+          {/* Preview Panel */}
+          <div className="overflow-hidden">
+            <PreviewPanel files={generatedFiles} isGenerating={isLoading} />
+          </div>
         </div>
 
         {/* Mobile Layout */}

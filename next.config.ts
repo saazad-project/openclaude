@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Enable React Compiler for optimal performance
-  reactCompiler: true,
-
   // Turbopack is stable in Next.js 16
   experimental: {
     serverActions: {

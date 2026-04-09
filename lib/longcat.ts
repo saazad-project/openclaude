@@ -16,7 +16,7 @@ export function createLongcatClient() {
 }
 
 export const LONGCAT_MODEL =
-  process.env.LONGCAT_MODEL || "longcat-v1";
+  process.env.LONGCAT_MODEL || "LongCat-Flash-Thinking-2601";
 
 // System prompt for code generation
 export const CODE_SYSTEM_PROMPT = `You are OpenClaude, an expert AI coding assistant that generates production-ready code.
