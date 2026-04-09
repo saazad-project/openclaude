@@ -10,3 +10,8 @@ GEMINI.md
 package-lock.json
 /.claude
 coverage/
+.next/
+*.swp
+*.swo
+.DS_Store
+
